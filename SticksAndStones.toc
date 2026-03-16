@@ -1,0 +1,32 @@
+## Interface: 11200
+## Title: |cff00ccffSticks and Stones|r
+## Notes: Shaman totem management
+## Author: Abstractz
+## Version: 1.0.0
+## SavedVariables: SNSProfiles
+
+Bindings.xml
+App.lua
+Settings\Settings.lua
+Settings\Rules.lua
+Settings\Store.lua
+Settings\Profiles.lua
+Settings\ImportExport.lua
+Settings\UI.lua
+Settings\UIGeneral.lua
+Settings\UISets.lua
+Settings\UIFlyouts.lua
+Settings\UIAdvanced.lua
+Totems\Totems.lua
+Totems\Catalog.lua
+Totems\FSM.lua
+Totems\Cast.lua
+Totems\Detect.lua
+Totems\Poll.lua
+Display\Display.lua
+Display\Cooldowns.lua
+Display\Frames.lua
+Display\Interaction.lua
+Display\Flyouts.lua
+Display\Tooltip.lua
+Minimap.lua

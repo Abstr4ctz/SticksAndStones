@@ -1,0 +1,20 @@
+<Bindings>
+    <Binding name="SNS_CAST_EARTH" header="STICKSANDSTONESHEADER" runOnUp="false">
+        if App and App.BindCastElement then App.BindCastElement(1) end
+    </Binding>
+    <Binding name="SNS_CAST_FIRE" runOnUp="false">
+        if App and App.BindCastElement then App.BindCastElement(2) end
+    </Binding>
+    <Binding name="SNS_CAST_WATER" runOnUp="false">
+        if App and App.BindCastElement then App.BindCastElement(3) end
+    </Binding>
+    <Binding name="SNS_CAST_AIR" runOnUp="false">
+        if App and App.BindCastElement then App.BindCastElement(4) end
+    </Binding>
+    <Binding name="SNS_CAST_SMART" runOnUp="false">
+        if App and App.BindCastSmart then App.BindCastSmart() end
+    </Binding>
+    <Binding name="SNS_CAST_FORCE" runOnUp="false">
+        if App and App.BindCastForce then App.BindCastForce() end
+    </Binding>
+</Bindings>
