@@ -3,12 +3,12 @@
 -- Owns TotemsInternal, Totems, TotemsInternal.slots, and the persistent
 -- snapshot table used by the display layer.
 -- Coordinates FSM transitions, catalog refresh sequencing, detect-driven
--- lifecycle events, world-entry teardown, poll-driven visual/range updates,
--- and lifecycle alert classification.
+-- lifecycle events, world-transition poll suppression, world-entry teardown,
+-- poll-driven visual/range updates, and lifecycle alert classification.
 -- Exports facade methods on Totems.
 -- Side effects: creates TotemsInternal and Totems globals at file scope so
 -- support modules can reference them per TOC order, and creates hidden facade-
--- owned frames for catalog refresh and detect events.
+-- owned frames for catalog refresh, detect events, and world-transition events.
 
 ------------------------------------------------------------------------
 -- Pod shared table
@@ -37,10 +37,13 @@ local snapshot            = { activeCount = 0 }
 
 local catalogRefreshFrame = CreateFrame("Frame", nil, UIParent)
 local detectFrame         = CreateFrame("Frame", nil, UIParent)
+local lifecycleFrame      = CreateFrame("Frame", nil, UIParent)
 catalogRefreshFrame:Hide()
 detectFrame:Hide()
+lifecycleFrame:Hide()
 local catalogRefreshWired = false
 local detectWired         = false
+local lifecycleWired      = false
 local lifecycleAlertElements = {}
 local lifecycleAlertGuids    = {}
 local lastLifecycleAlertCount = 0
@@ -51,6 +54,9 @@ local CLEAR_SOURCE_UNITXP_MISSING  = 3
 local CLEAR_SOURCE_RECALL          = 4
 local CLEAR_SOURCE_PLAYER_DEAD     = 5
 local CLEAR_SOURCE_ENTERING_WORLD  = 6
+local CONFIG_SCOPE_RANGE           = "range"
+local CONFIG_SCOPE_SETS            = "sets"
+local CONFIG_SCOPE_PROFILE         = "profile"
 
 ------------------------------------------------------------------------
 -- Private helpers
@@ -83,6 +89,12 @@ end
 
 local function fireCatalogChanged()
     M.OnCatalogChanged(TI.BuildCatalogSnapshot())
+end
+
+local function setWorldTransitionSuppressed(suppressed)
+    if TI.SetWorldTransitionSuppressed then
+        TI.SetWorldTransitionSuppressed(suppressed)
+    end
 end
 
 local function publishStateContract()
@@ -278,6 +290,18 @@ local function clearChosenSet()
     return applyChosenSet(nil)
 end
 
+local function scopeTouchesConfiguredChosenSet(scope)
+    return scope == nil
+       or scope == CONFIG_SCOPE_SETS
+       or scope == CONFIG_SCOPE_PROFILE
+end
+
+local function scopeTouchesRangeState(scope)
+    return scope == nil
+       or scope == CONFIG_SCOPE_RANGE
+       or scope == CONFIG_SCOPE_PROFILE
+end
+
 -- Returns canonical chosen IDs for a valid config row, or nil when the active
 -- set row is missing or invalid.
 local function resolveConfiguredChosenSet(setIndex)
@@ -470,18 +494,11 @@ local function onDetectPlayerDeadEvent()
     handleDetectDismissAll(CLEAR_SOURCE_PLAYER_DEAD)
 end
 
-local function onDetectPlayerEnteringWorldEvent()
-    TI.ResetDetectState()
-    detectFrame:SetScript("OnUpdate", nil)
-    handleDetectDismissAll(CLEAR_SOURCE_ENTERING_WORLD)
-end
-
 local DETECT_EVENT_HANDLERS = {
     SPELL_CAST_EVENT     = onDetectSpellCastEvent,
     UNIT_MODEL_CHANGED   = onDetectUnitModelChangedEvent,
     UNIT_DIED            = handleDetectGuidDeath,
     PLAYER_DEAD          = onDetectPlayerDeadEvent,
-    PLAYER_ENTERING_WORLD = onDetectPlayerEnteringWorldEvent,
 }
 
 local function onDetectEvent()
@@ -500,6 +517,40 @@ local function wireDetect()
         detectFrame:RegisterEvent(eventName)
     end
     detectWired = true
+end
+
+local function handleWorldTransitionSuppressed()
+    setWorldTransitionSuppressed(true)
+end
+
+local function onLifecyclePlayerEnteringWorldEvent()
+    TI.ResetDetectState()
+    detectFrame:SetScript("OnUpdate", nil)
+    handleDetectDismissAll(CLEAR_SOURCE_ENTERING_WORLD)
+    setWorldTransitionSuppressed(false)
+end
+
+local LIFECYCLE_EVENT_HANDLERS = {
+    PLAYER_LOGOUT         = handleWorldTransitionSuppressed,
+    PLAYER_LEAVING_WORLD  = handleWorldTransitionSuppressed,
+    PLAYER_ENTERING_WORLD = onLifecyclePlayerEnteringWorldEvent,
+}
+
+local function onLifecycleEvent()
+    local handler = LIFECYCLE_EVENT_HANDLERS[event]
+    if handler then
+        handler()
+    end
+end
+
+local function wireLifecycle()
+    if lifecycleWired then return end
+
+    lifecycleFrame:SetScript("OnEvent", onLifecycleEvent)
+    for eventName in pairs(LIFECYCLE_EVENT_HANDLERS) do
+        lifecycleFrame:RegisterEvent(eventName)
+    end
+    lifecycleWired = true
 end
 
 ------------------------------------------------------------------------
@@ -522,6 +573,7 @@ local function initialize()
 
     wireCatalogRefresh()
     wireDetect()
+    wireLifecycle()
     TI.hasUnitXP = SNS.features and SNS.features.hasUnitXP == true or false
     TI.InitializePolling(handlePollVisualResults, handlePollRangeResults)
 end
@@ -531,10 +583,18 @@ local function getSnapshot()
 end
 
 -- Called by App when Settings fires OnConfigChanged.
--- Reconciles chosen totems against the active config row on every config change.
-local function applyConfig()
-    local rangeChanged = clearDisabledRangeFadeState()
-    local chosenChanged = reconcileConfiguredChosenSet(SNSConfig.activeSetIndex)
+-- Only set/profile scopes replay configured chosen-state reconciliation.
+local function applyConfig(scope)
+    local rangeChanged = false
+    local chosenChanged = false
+
+    if scopeTouchesRangeState(scope) then
+        rangeChanged = clearDisabledRangeFadeState()
+    end
+    if scopeTouchesConfiguredChosenSet(scope) then
+        chosenChanged = reconcileConfiguredChosenSet(SNSConfig.activeSetIndex)
+    end
+
     if chosenChanged or rangeChanged then
         fireStateChangedAfterRecompute()
     end

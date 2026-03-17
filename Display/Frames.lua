@@ -59,6 +59,20 @@ local function parentPointToFrame(frame, x, y)
     return x * factor, y * factor
 end
 
+local function getLayoutParentSize()
+    local width = UIParent and UIParent:GetWidth() or nil
+    local height = UIParent and UIParent:GetHeight() or nil
+
+    if type(width) ~= "number" or width <= 0 then
+        width = GetScreenWidth()
+    end
+    if type(height) ~= "number" or height <= 0 then
+        height = GetScreenHeight()
+    end
+
+    return width, height
+end
+
 local function createInputFrame(parent, enableWheel)
     local input = CreateFrame("Button", nil, parent)
     input:SetAllPoints(parent)
@@ -496,30 +510,48 @@ local function applyIconChrome(frame, frameSize, showBorder)
     applyCooldownLayout(frame)
 end
 
-local function computeDefaultPosition(element)
-    local screenW    = GetScreenWidth()
-    local screenH    = GetScreenHeight()
+local function computeDefaultPositions()
+    -- Default auto-layout lives in the same UIParent space as persisted anchors.
+    local parentW, parentH = getLayoutParentSize()
     local scale      = M.GetScale()
     local visualSize = M.BUTTON_SIZE * scale
     local gap        = M.BUTTON_GAP
     local total      = SNS.MAX_TOTEM_SLOTS
     local totalWidth = total * visualSize + (total - 1) * gap
-    local startX     = (screenW - totalWidth) / 2
-    local centerX    = startX + (element - 1) * (visualSize + gap) + visualSize / 2
-    local centerY    = screenH / 2
-    return centerX, centerY
+    local startX     = (parentW - totalWidth) / 2
+    local centerY    = parentH / 2
+    local positions  = {}
+    local centerX
+    local element
+
+    for element = 1, total do
+        centerX = startX + (element - 1) * (visualSize + gap) + visualSize / 2
+        positions[element] = { x = centerX, y = centerY }
+    end
+
+    return positions
 end
 
 local function restoreButtonPosition(btn)
     local cfg = M.GetElementConfig(btn.element)
     local centerX
     local centerY
+    local defaults
+    local layout
 
     if cfg and cfg.centerX ~= nil and cfg.centerY ~= nil then
         centerX = cfg.centerX
         centerY = cfg.centerY
     else
-        centerX, centerY = computeDefaultPosition(btn.element)
+        defaults = computeDefaultPositions()
+        layout = defaults and defaults[btn.element] or nil
+        centerX = layout and layout.x or nil
+        centerY = layout and layout.y or nil
+    end
+
+    if centerX == nil or centerY == nil then
+        centerX = 0
+        centerY = 0
     end
 
     centerX, centerY = parentPointToFrame(btn, centerX, centerY)

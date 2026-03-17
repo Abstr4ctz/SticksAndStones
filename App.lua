@@ -42,6 +42,13 @@ local ACTION_TYPES   = SNS.ACTION_TYPES
 local ACTION_ROUTES  = {}
 local ACTION_CHECKS  = {}
 local SLASH_ROUTES   = {}
+local MIN_NAMPOWER_MAJOR        = 2
+local MIN_NAMPOWER_MINOR        = 41
+local MIN_NAMPOWER_PATCH        = 0
+local NAMPOWER_VERSION_POPUP_ID = "SNSNampowerVersionRequirement"
+local NAMPOWER_RELEASES_URL     = "https://gitea.com/avitasia/nampower/releases"
+local NAMPOWER_URL_COLOR        = "|cff66ccff"
+local COLOR_RESET              = "|r"
 local HELP_LINES = {
     "SticksAndStones commands:",
     "  /sns            - toggle settings",
@@ -57,6 +64,44 @@ local HELP_LINES = {
 local function hasNampower()
     local ok, value = pcall(function() return GetNampowerVersion end)
     return ok and value ~= nil
+end
+
+local function getNampowerVersion()
+    local getter = GetNampowerVersion
+    local ok
+    local major
+    local minor
+    local patch
+
+    if type(getter) ~= "function" then return nil, nil, nil end
+
+    ok, major, minor, patch = pcall(getter)
+    if not ok then return nil, nil, nil end
+    if type(major) ~= "number" or type(minor) ~= "number" or type(patch) ~= "number" then
+        return nil, nil, nil
+    end
+
+    return math.floor(major), math.floor(minor), math.floor(patch)
+end
+
+local function formatVersionString(major, minor, patch)
+    if type(major) ~= "number" or type(minor) ~= "number" or type(patch) ~= "number" then
+        return "unknown"
+    end
+    return "v" .. tostring(major) .. "." .. tostring(minor) .. "." .. tostring(patch)
+end
+
+local function hasMinimumNampowerVersion()
+    local major, minor, patch = getNampowerVersion()
+
+    if not major then return false end
+    if major ~= MIN_NAMPOWER_MAJOR then
+        return major > MIN_NAMPOWER_MAJOR
+    end
+    if minor ~= MIN_NAMPOWER_MINOR then
+        return minor > MIN_NAMPOWER_MINOR
+    end
+    return patch >= MIN_NAMPOWER_PATCH
 end
 
 local function hasUnitXP()
@@ -137,6 +182,49 @@ local function initializeMinimap()
     if SNS.Minimap and SNS.Minimap.Initialize then
         SNS.Minimap.Initialize()
     end
+end
+
+local function ensureNampowerVersionPopup()
+    if type(StaticPopupDialogs) ~= "table" then return nil end
+    if StaticPopupDialogs[NAMPOWER_VERSION_POPUP_ID] then return true end
+
+    StaticPopupDialogs[NAMPOWER_VERSION_POPUP_ID] = {
+        text           = "",
+        button1        = "OK",
+        timeout        = 0,
+        whileDead      = 1,
+        hideOnEscape   = 1,
+        preferredIndex = 3,
+    }
+    return true
+end
+
+local function showNampowerVersionPopup()
+    local required = formatVersionString(MIN_NAMPOWER_MAJOR, MIN_NAMPOWER_MINOR, MIN_NAMPOWER_PATCH)
+    local detected = formatVersionString(getNampowerVersion())
+    local message = "SticksAndStones modifier-key features require Nampower "
+                 .. required
+                 .. " or above.\nDetected: "
+                 .. detected
+                 .. ".\nGet updates at:\n"
+                 .. NAMPOWER_URL_COLOR
+                 .. NAMPOWER_RELEASES_URL
+                 .. COLOR_RESET
+                 .. "."
+    local dialog
+
+    if ensureNampowerVersionPopup() and type(StaticPopup_Show) == "function" then
+        dialog = StaticPopupDialogs[NAMPOWER_VERSION_POPUP_ID]
+        if dialog then
+            dialog.text = message
+        end
+        StaticPopup_Show(NAMPOWER_VERSION_POPUP_ID)
+    else
+        DEFAULT_CHAT_FRAME:AddMessage("|cffff6600SticksAndStones:|r " .. message)
+    end
+
+    DEFAULT_CHAT_FRAME:AddMessage("|cffff6600SticksAndStones:|r Get Nampower: " .. NAMPOWER_URL_COLOR .. NAMPOWER_RELEASES_URL .. COLOR_RESET)
+    return true
 end
 
 ------------------------------------------------------------------------
@@ -223,8 +311,8 @@ local function handleTotemLifecycleAlert(element, guid)
     Display.PlayLifecycleAlert(element, guid)
 end
 
-local function handleSettingsConfigChanged()
-    Totems.ApplyConfig()
+local function handleSettingsConfigChanged(scope)
+    Totems.ApplyConfig(scope)
     Display.ApplyConfig()
     if SNS.Minimap and SNS.Minimap.ApplyConfig then
         SNS.Minimap.ApplyConfig()
@@ -254,6 +342,10 @@ local function handlePlayerLogin()
     Totems.SetPollingEnabled(true)
     Display.Render(Totems.GetSnapshot())
     DEFAULT_CHAT_FRAME:AddMessage("SticksAndStones loaded.")
+
+    if not hasMinimumNampowerVersion() then
+        showNampowerVersionPopup()
+    end
 end
 
 ------------------------------------------------------------------------

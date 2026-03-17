@@ -13,6 +13,12 @@
 local M = SettingsInternal  -- created by Settings.lua, loaded first per TOC order
 
 ------------------------------------------------------------------------
+-- Private state
+------------------------------------------------------------------------
+
+local storeWasJustCreated = false
+
+------------------------------------------------------------------------
 -- Private helpers
 ------------------------------------------------------------------------
 
@@ -37,16 +43,42 @@ local function repairStoreTables(store)
     end
 end
 
+local function buildStarterSetRow()
+    local row = M.sanitizeSetRow({})
+    if type(row) == "table" then
+        return row
+    end
+    return {}
+end
+
+local function seedStarterSet(config)
+    if type(config) ~= "table" then return config end
+
+    if type(config.sets) ~= "table" then
+        config.sets = {}
+    end
+    if table.getn(config.sets) > 0 then
+        return config
+    end
+
+    config.sets[1] = buildStarterSetRow()
+    config.activeSetIndex = 1
+    return config
+end
+
 -- sanitizeProfile() returns a fresh table, so the repaired row is always
 -- written back into the store before it is returned or rebound.
-local function buildSanitizedProfile(key)
+local function buildSanitizedProfile(key, shouldSeedStarterSet)
     local config = M.sanitizeProfile(SNSProfiles.profiles[key])
+    if shouldSeedStarterSet then
+        seedStarterSet(config)
+    end
     SNSProfiles.profiles[key] = config
     return config
 end
 
 local function bindActiveProfile(key)
-    local config = buildSanitizedProfile(key)
+    local config = buildSanitizedProfile(key, false)
     SNSConfig = config
     return config
 end
@@ -85,18 +117,24 @@ end
 local function ensureStore()
     if not hasCurrentSchema(SNSProfiles) then
         SNSProfiles = buildEmptyStore()
+        storeWasJustCreated = true
         return
     end
     repairStoreTables(SNSProfiles)
+    storeWasJustCreated = false
 end
 
 -- Ensures the character's own profile row exists, resolves the persisted
 -- active-profile mapping, saves the repaired mapping, and rebinds SNSConfig.
 local function bindCharacterProfile(charKey)
-    local ownConfig = buildSanitizedProfile(charKey)
+    -- The starter set is only injected for the very first profile materialized
+    -- from a newly created SavedVariables root.
+    local shouldSeedStarterSet = storeWasJustCreated and type(SNSProfiles.profiles[charKey]) ~= "table"
+    local ownConfig = buildSanitizedProfile(charKey, shouldSeedStarterSet)
     local activeKey = resolveActiveProfileKey(charKey)
 
     SNSProfiles.charActiveProfile[charKey] = activeKey
+    storeWasJustCreated = false
 
     if activeKey == charKey then
         SNSConfig = ownConfig

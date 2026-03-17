@@ -26,6 +26,10 @@ local SI = SettingsInternal  -- sibling modules add fields onto the same table
 
 local SET_DIRECTION_FORWARD  = 1
 local SET_DIRECTION_BACKWARD = -1
+local CONFIG_SCOPE_DISPLAY   = "display"
+local CONFIG_SCOPE_RANGE     = "range"
+local CONFIG_SCOPE_SETS      = "sets"
+local CONFIG_SCOPE_PROFILE   = "profile"
 
 ------------------------------------------------------------------------
 -- Private helpers
@@ -37,10 +41,26 @@ local function refreshVisibleUI()
     if UI and UI.IsVisible and UI.IsVisible() then UI.Refresh() end
 end
 
--- Notifies Settings UI then broadcasts to dependent pods.
-local function broadcastConfigChanged()
+-- Notifies Settings UI then broadcasts the config scope to dependent pods.
+local function broadcastConfigChanged(scope)
     refreshVisibleUI()
-    M.OnConfigChanged()
+    M.OnConfigChanged(scope or CONFIG_SCOPE_DISPLAY)
+end
+
+local function broadcastDisplayConfigChanged()
+    broadcastConfigChanged(CONFIG_SCOPE_DISPLAY)
+end
+
+local function broadcastRangeConfigChanged()
+    broadcastConfigChanged(CONFIG_SCOPE_RANGE)
+end
+
+local function broadcastSetConfigChanged()
+    broadcastConfigChanged(CONFIG_SCOPE_SETS)
+end
+
+local function broadcastProfileConfigChanged()
+    broadcastConfigChanged(CONFIG_SCOPE_PROFILE)
 end
 
 -- Notifies the Flyouts tab, then asks App to refresh any open live flyout.
@@ -216,7 +236,7 @@ end
 -- Flip the saved bar visibility flag and notify dependent pods to refresh.
 local function toggleBarVisible()
     SNSConfig.visible = not SNSConfig.visible
-    broadcastConfigChanged()
+    broadcastDisplayConfigChanged()
     return SNSConfig.visible
 end
 
@@ -225,7 +245,7 @@ end
 local function resetToDefaults()
     SI.ensureStore()
     SI.resetCharacterProfile(SI.characterKey())
-    broadcastConfigChanged()
+    broadcastProfileConfigChanged()
     return true
 end
 
@@ -245,7 +265,7 @@ local function resetGeneralToDefaults()
     SNSConfig.showBorder      = defaults.showBorder
 
     resetGeneralElementDefaults(SNSConfig, defaults)
-    broadcastConfigChanged()
+    broadcastDisplayConfigChanged()
     return true
 end
 
@@ -274,7 +294,7 @@ local function setActiveProfile(key)
     ok, err = SI.SetActiveProfileInternal(normalized)
     if not ok then return nil, err end
 
-    broadcastConfigChanged()
+    broadcastProfileConfigChanged()
     return true
 end
 
@@ -370,7 +390,7 @@ local function setLocked(value)
     if not SI.isBoolean(value) then return end
     if SNSConfig.locked == value then return end
     SNSConfig.locked = value
-    broadcastConfigChanged()
+    broadcastDisplayConfigChanged()
 end
 
 local function setClickThrough(enabled)
@@ -378,7 +398,7 @@ local function setClickThrough(enabled)
     if SNSConfig.clickThrough == enabled then return true end
 
     SNSConfig.clickThrough = enabled
-    broadcastConfigChanged()
+    broadcastDisplayConfigChanged()
     return true
 end
 
@@ -387,7 +407,7 @@ local function setClickThroughModifier(value)
     if SNSConfig.clickThroughMod == value then return true end
 
     SNSConfig.clickThroughMod = value
-    broadcastConfigChanged()
+    broadcastDisplayConfigChanged()
     return true
 end
 
@@ -396,7 +416,7 @@ local function setFlyoutMode(value)
     if SNSConfig.flyoutMode == value then return true end
 
     SNSConfig.flyoutMode = value
-    broadcastConfigChanged()
+    broadcastDisplayConfigChanged()
     return true
 end
 
@@ -405,7 +425,7 @@ local function setFlyoutModifier(value)
     if SNSConfig.flyoutMod == value then return true end
 
     SNSConfig.flyoutMod = value
-    broadcastConfigChanged()
+    broadcastDisplayConfigChanged()
     return true
 end
 
@@ -442,14 +462,14 @@ local function setScale(value)
     local clamped = SI.clamp(value, SI.SCALE_MIN, SI.SCALE_MAX)
     if SNSConfig.scale == clamped then return end
     SNSConfig.scale = clamped
-    broadcastConfigChanged()
+    broadcastDisplayConfigChanged()
 end
 
 local function setBorderVisible(show)
     if not SI.isBoolean(show) then return end
     if SNSConfig.showBorder == show then return end
     SNSConfig.showBorder = show
-    broadcastConfigChanged()
+    broadcastDisplayConfigChanged()
 end
 
 local function setSnapAlign(enabled)
@@ -481,7 +501,7 @@ local function setRangeFade(enabled)
     if SNSConfig.rangeFade == enabled then return true end
 
     SNSConfig.rangeFade = enabled
-    broadcastConfigChanged()
+    broadcastRangeConfigChanged()
     return true
 end
 
@@ -490,7 +510,7 @@ local function setTimerShowMinutes(enabled)
     if SNSConfig.timerShowMinutes == enabled then return true end
 
     SNSConfig.timerShowMinutes = enabled
-    broadcastConfigChanged()
+    broadcastDisplayConfigChanged()
     return true
 end
 
@@ -501,7 +521,7 @@ local function setExpiryThresholdSecs(value)
     if SNSConfig.expiryThresholdSecs == value then return value end
 
     SNSConfig.expiryThresholdSecs = value
-    broadcastConfigChanged()
+    broadcastDisplayConfigChanged()
     return value
 end
 
@@ -510,7 +530,7 @@ local function setExpirySoundEnabled(enabled)
     if SNSConfig.expirySoundEnabled == enabled then return true end
 
     SNSConfig.expirySoundEnabled = enabled
-    broadcastConfigChanged()
+    broadcastDisplayConfigChanged()
     return true
 end
 
@@ -519,7 +539,7 @@ local function setTooltipsEnabled(enabled)
     if SNSConfig.tooltipsEnabled == enabled then return true end
 
     SNSConfig.tooltipsEnabled = enabled
-    broadcastConfigChanged()
+    broadcastDisplayConfigChanged()
     return true
 end
 
@@ -528,7 +548,7 @@ local function setTooltipAnchorMode(value)
     if SNSConfig.tooltipAnchorMode == value then return true end
 
     SNSConfig.tooltipAnchorMode = value
-    broadcastConfigChanged()
+    broadcastDisplayConfigChanged()
     return true
 end
 
@@ -537,7 +557,7 @@ local function setTooltipDirection(value)
     if SNSConfig.tooltipDirection == value then return true end
 
     SNSConfig.tooltipDirection = value
-    broadcastConfigChanged()
+    broadcastDisplayConfigChanged()
     return true
 end
 
@@ -547,7 +567,7 @@ local function setTooltipOffsetX(value)
     value = SI.sanitizeTooltipOffset(value, SNSConfig.tooltipOffsetX)
     if SNSConfig.tooltipOffsetX == value then return value end
     SNSConfig.tooltipOffsetX = value
-    broadcastConfigChanged()
+    broadcastDisplayConfigChanged()
     return value
 end
 
@@ -557,7 +577,7 @@ local function setTooltipOffsetY(value)
     value = SI.sanitizeTooltipOffset(value, SNSConfig.tooltipOffsetY)
     if SNSConfig.tooltipOffsetY == value then return value end
     SNSConfig.tooltipOffsetY = value
-    broadcastConfigChanged()
+    broadcastDisplayConfigChanged()
     return value
 end
 
@@ -571,7 +591,7 @@ local function setElementColorTriplet(element, r, g, b, rKey, gKey, bKey)
     cfg[rKey] = SI.sanitizeColorChannel(r)
     cfg[gKey] = SI.sanitizeColorChannel(g)
     cfg[bKey] = SI.sanitizeColorChannel(b)
-    broadcastConfigChanged()
+    broadcastDisplayConfigChanged()
     return true
 end
 
@@ -641,7 +661,7 @@ local function setActiveSet(index)
         return nil, "invalid_index"
     end
     SNSConfig.activeSetIndex = index
-    broadcastConfigChanged()
+    broadcastSetConfigChanged()
     return true
 end
 
@@ -673,7 +693,7 @@ local function cycleSet(direction)
     end
     if nextIndex == SNSConfig.activeSetIndex then return end
     SNSConfig.activeSetIndex = nextIndex
-    broadcastConfigChanged()
+    broadcastSetConfigChanged()
 end
 
 local function cycleSetForward()
@@ -692,7 +712,7 @@ local function createSet()
     local newSet   = buildChosenSetRow(App.GetChosenSnapshot())
     SNSConfig.sets[newIndex] = newSet
     SNSConfig.activeSetIndex = newIndex
-    broadcastConfigChanged()
+    broadcastSetConfigChanged()
     return newIndex
 end
 
@@ -721,7 +741,7 @@ local function removeSet(index)
     end
     SNSConfig.activeSetIndex = newActive
     if newActive ~= prevActive or activeRowWasRemoved then
-        broadcastConfigChanged()
+        broadcastSetConfigChanged()
     else
         refreshVisibleUI()
     end
@@ -749,7 +769,7 @@ local function reorderSet(index, direction)
     end
     SNSConfig.activeSetIndex = newActive
     if newActive ~= prevActive then
-        broadcastConfigChanged()
+        broadcastSetConfigChanged()
     else
         refreshVisibleUI()
     end

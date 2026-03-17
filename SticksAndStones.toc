@@ -2,7 +2,7 @@
 ## Title: |cff00ccffSticks and Stones|r
 ## Notes: Shaman totem management
 ## Author: Abstractz
-## Version: 1.0.0
+## Version: 1.0.1
 ## SavedVariables: SNSProfiles
 
 Bindings.xml

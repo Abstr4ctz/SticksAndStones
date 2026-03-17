@@ -1,10 +1,10 @@
 -- SticksAndStones: Totems/Poll.lua
 -- Support module for poll-loop timing, expiry/range/existence collection, and spawn-
 -- duration resolution in the Totems pod.
--- Owns the hidden poll frame, reusable buffers, timer state, and facade-wired
--- poll handlers.
--- Exports poll initialization/control and spawn-duration resolution on
--- TotemsInternal.
+-- Owns the hidden poll frame, reusable buffers, timer state, world-transition
+-- suppression state, and facade-wired poll handlers.
+-- Exports poll initialization/control, world-transition suppression, and spawn-
+-- duration resolution on TotemsInternal.
 -- Side effects: creates a hidden private frame, reads TotemsInternal.slots,
 -- TotemsInternal.bySpellId, TotemsInternal.hasUnitXP, and SNSConfig, and calls
 -- GetTime(), GetSpellDuration(), and UnitXP() at runtime.
@@ -43,6 +43,7 @@ local expiredCount          = 0
 local missingCount          = 0
 local visualResultsCallback = nil
 local rangeResultsCallback  = nil
+local worldTransitionSuppressed = false
 
 ------------------------------------------------------------------------
 -- Private helpers
@@ -51,6 +52,10 @@ local rangeResultsCallback  = nil
 local function resetTickState()
     lastVisualTick = 0
     lastRangeTick  = 0
+end
+
+local function isWorldTransitionSuppressed()
+    return worldTransitionSuppressed == true
 end
 
 local function hasActiveSlots()
@@ -163,6 +168,9 @@ local function collectRangeTickState()
 end
 
 local function shouldRunVisualTick(now)
+    if isWorldTransitionSuppressed() then
+        return false
+    end
     if now - lastVisualTick < VISUAL_TICK_INTERVAL then
         return false
     end
@@ -172,6 +180,9 @@ local function shouldRunVisualTick(now)
 end
 
 local function shouldRunRangeTick(now)
+    if isWorldTransitionSuppressed() then
+        return false
+    end
     if not M.hasUnitXP then
         return false
     end
@@ -205,6 +216,10 @@ end
 ------------------------------------------------------------------------
 
 local function onPollUpdate()
+    if isWorldTransitionSuppressed() then
+        return
+    end
+
     local now = GetTime()
 
     if shouldRunVisualTick(now) then
@@ -236,17 +251,17 @@ end
 local function syncPollingRegistration()
     if not pollFrameWired then return end
 
-    if hasActiveSlots() and pollingEnabled then
-        if not pollFrame:IsShown() then
+    if isWorldTransitionSuppressed() or not hasActiveSlots() or not pollingEnabled then
+        if pollFrame:IsShown() then
+            pollFrame:Hide()
             resetTickState()
-            pollFrame:Show()
         end
         return
     end
 
-    if pollFrame:IsShown() then
-        pollFrame:Hide()
+    if not pollFrame:IsShown() then
         resetTickState()
+        pollFrame:Show()
     end
 end
 
@@ -269,6 +284,13 @@ local function setPollingEnabled(enabled)
     syncPollingRegistration()
 end
 
+local function setWorldTransitionSuppressed(suppressed)
+    if type(suppressed) ~= "boolean" then return nil end
+
+    worldTransitionSuppressed = suppressed
+    syncPollingRegistration()
+end
+
 ------------------------------------------------------------------------
 -- Internal exports
 ------------------------------------------------------------------------
@@ -276,4 +298,5 @@ end
 M.InitializePolling       = initializePolling
 M.SyncPollingRegistration = syncPollingRegistration
 M.SetPollingEnabled       = setPollingEnabled
+M.SetWorldTransitionSuppressed = setWorldTransitionSuppressed
 M.ResolveSpawnDuration    = resolveSpawnDuration

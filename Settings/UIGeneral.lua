@@ -85,12 +85,18 @@ local state = {
     panel        = nil,
     isSyncing    = false,
     pendingScale = nil,
+    colorPickerButtonsWired = nil,
+    colorPickerOkayOriginal = nil,
+    colorPickerCancelOriginal = nil,
     colorPicker  = {
         controlKind = nil,
         element     = nil,
         previousR   = nil,
         previousG   = nil,
         previousB   = nil,
+        pendingR    = nil,
+        pendingG    = nil,
+        pendingB    = nil,
     },
 }
 
@@ -200,21 +206,30 @@ local function getColorRow(panel, controlKind, element)
     return rows[element]
 end
 
-local function refreshColorRow(panel, controlKind, element)
+local function previewColorRow(panel, controlKind, element, r, g, b)
     local row = getColorRow(panel, controlKind, element)
-    local r
-    local g
-    local b
 
     if not row then return end
 
-    r, g, b = getElementColorTriplet(controlKind, element)
+    r = SI.sanitizeColorChannel(r)
+    g = SI.sanitizeColorChannel(g)
+    b = SI.sanitizeColorChannel(b)
+
     if row.swatchFill then
         row.swatchFill:SetVertexColor(r, g, b)
     end
     if row.edit then
         row.edit:SetText(formatColorTriplet(r, g, b))
     end
+end
+
+local function refreshColorRow(panel, controlKind, element)
+    local r
+    local g
+    local b
+
+    r, g, b = getElementColorTriplet(controlKind, element)
+    previewColorRow(panel, controlKind, element, r, g, b)
 end
 
 local function refreshColorRows(panel, controlKind)
@@ -231,17 +246,102 @@ local function clearColorPickerState()
     state.colorPicker.previousR = nil
     state.colorPicker.previousG = nil
     state.colorPicker.previousB = nil
+    state.colorPicker.pendingR = nil
+    state.colorPicker.pendingG = nil
+    state.colorPicker.pendingB = nil
 end
 
-local function dismissColorPicker()
-    clearColorPickerState()
+local function clearColorPickerBindings()
     if not ColorPickerFrame then return end
 
     ColorPickerFrame.func = nil
     ColorPickerFrame.opacityFunc = nil
     ColorPickerFrame.cancelFunc = nil
     ColorPickerFrame.previousValues = nil
+end
 
+local function finalizeColorPicker(shouldCancel)
+    local picker = state.colorPicker
+    local r
+    local g
+    local b
+
+    if not picker.controlKind or not picker.element then
+        clearColorPickerBindings()
+        clearColorPickerState()
+        return
+    end
+
+    if shouldCancel then
+        refreshColorRow(state.panel, picker.controlKind, picker.element)
+        clearColorPickerBindings()
+        clearColorPickerState()
+        return
+    end
+
+    r = (type(picker.pendingR) == "number") and picker.pendingR or picker.previousR
+    g = (type(picker.pendingG) == "number") and picker.pendingG or picker.previousG
+    b = (type(picker.pendingB) == "number") and picker.pendingB or picker.previousB
+
+    if r == picker.previousR and g == picker.previousG and b == picker.previousB then
+        clearColorPickerBindings()
+        clearColorPickerState()
+        return
+    end
+
+    applyElementColorTriplet(picker.controlKind, picker.element, r, g, b)
+    clearColorPickerBindings()
+    clearColorPickerState()
+end
+
+local function onColorPickerOkayClick()
+    local original = state.colorPickerOkayOriginal
+    if original then
+        original()
+    end
+    finalizeColorPicker(nil)
+end
+
+local function onColorPickerCancelClick()
+    local original = state.colorPickerCancelOriginal
+    if original then
+        original()
+    end
+    finalizeColorPicker(true)
+end
+
+local function ensureColorPickerButtonScripts()
+    local okayButton
+    local cancelButton
+
+    if state.colorPickerButtonsWired then return true end
+    if not ColorPickerFrame then return nil end
+
+    okayButton = ColorPickerOkayButton or getglobal("ColorPickerOkayButton")
+    cancelButton = ColorPickerCancelButton or getglobal("ColorPickerCancelButton")
+    if not okayButton or not cancelButton then return nil end
+
+    state.colorPickerOkayOriginal = okayButton:GetScript("OnClick")
+    state.colorPickerCancelOriginal = cancelButton:GetScript("OnClick")
+    okayButton:SetScript("OnClick", onColorPickerOkayClick)
+    cancelButton:SetScript("OnClick", onColorPickerCancelClick)
+    state.colorPickerButtonsWired = true
+    return true
+end
+
+local function dismissColorPicker()
+    local picker = state.colorPicker
+
+    if picker.controlKind and picker.element then
+        refreshColorRow(state.panel, picker.controlKind, picker.element)
+    end
+
+    if not ColorPickerFrame then
+        clearColorPickerState()
+        return
+    end
+
+    clearColorPickerBindings()
     if ColorPickerFrame:IsShown() then
         if HideUIPanel then
             HideUIPanel(ColorPickerFrame)
@@ -249,6 +349,7 @@ local function dismissColorPicker()
             ColorPickerFrame:Hide()
         end
     end
+    clearColorPickerState()
 end
 
 local function clearPendingScale()
@@ -280,7 +381,10 @@ local function onColorPickerChanged()
     if not picker.controlKind or not picker.element or not ColorPickerFrame then return end
 
     r, g, b = ColorPickerFrame:GetColorRGB()
-    applyElementColorTriplet(picker.controlKind, picker.element, r, g, b)
+    picker.pendingR = SI.sanitizeColorChannel(r)
+    picker.pendingG = SI.sanitizeColorChannel(g)
+    picker.pendingB = SI.sanitizeColorChannel(b)
+    previewColorRow(state.panel, picker.controlKind, picker.element, picker.pendingR, picker.pendingG, picker.pendingB)
 end
 
 local function onColorPickerCancelled(previousValues)
@@ -301,20 +405,24 @@ local function onColorPickerCancelled(previousValues)
         b = tonumber(previousValues.b) or tonumber(previousValues[3]) or b
     end
 
-    applyElementColorTriplet(picker.controlKind, picker.element, r, g, b)
-    clearColorPickerState()
+    picker.pendingR = SI.sanitizeColorChannel(r)
+    picker.pendingG = SI.sanitizeColorChannel(g)
+    picker.pendingB = SI.sanitizeColorChannel(b)
+    previewColorRow(state.panel, picker.controlKind, picker.element, picker.pendingR, picker.pendingG, picker.pendingB)
 end
 
 local function openColorPicker(controlKind, element)
     local r
     local g
     local b
-    local level
 
     if not ColorPickerFrame then
         SI.printChat(SI.CHAT_PREFIX .. "color picker is unavailable.")
         return
     end
+
+    dismissColorPicker()
+    ensureColorPickerButtonScripts()
 
     r, g, b = getElementColorTriplet(controlKind, element)
     state.colorPicker.controlKind = controlKind
@@ -322,6 +430,9 @@ local function openColorPicker(controlKind, element)
     state.colorPicker.previousR = r
     state.colorPicker.previousG = g
     state.colorPicker.previousB = b
+    state.colorPicker.pendingR = r
+    state.colorPicker.pendingG = g
+    state.colorPicker.pendingB = b
 
     ColorPickerFrame.func = onColorPickerChanged
     ColorPickerFrame.opacityFunc = nil
@@ -336,11 +447,7 @@ local function openColorPicker(controlKind, element)
         ColorPickerFrame:Show()
     end
 
-    ColorPickerFrame:SetFrameStrata("TOOLTIP")
-    if state.panel and state.panel.GetFrameLevel then
-        level = state.panel:GetFrameLevel() or 0
-        ColorPickerFrame:SetFrameLevel(level + 20)
-    end
+    ColorPickerFrame:SetFrameStrata("DIALOG")
     if ColorPickerFrame.SetToplevel then
         ColorPickerFrame:SetToplevel(true)
     end

@@ -99,6 +99,18 @@ local function parseNumericEdit(edit)
     return tonumber(edit:GetText())
 end
 
+local function getTextHeight(fontString, minHeight)
+    local height = fontString and fontString:GetHeight() or 0
+
+    if type(height) ~= "number" or height < 0 then
+        height = 0
+    end
+    if type(minHeight) == "number" and height < minHeight then
+        height = minHeight
+    end
+    return height
+end
+
 local function getProfileKeys()
     local keys = Settings.ListProfiles and Settings.ListProfiles() or nil
     if type(keys) ~= "table" then
@@ -839,10 +851,10 @@ local function buildDurationSection(parent, controls, y)
     hint:SetPoint("TOPLEFT", parent, "TOPLEFT", 18, y - 26)
     hint:SetWidth(292)
     hint:SetJustifyH("LEFT")
-    hint:SetText("0 disables only the threshold warning. Each active totem alerts at most once: at threshold, or on expiry/destruction if it never alerted earlier.")
+    hint:SetText("0 disables only the threshold warning. Each active totem alerts once: at threshold, or on expiry/destruction if it never alerted.")
     controls.durationHint = hint
 
-    return y - 54
+    return y - 26 - getTextHeight(hint, 24) - 14
 end
 
 local function buildTooltipSection(parent, controls, y)
@@ -911,12 +923,13 @@ local function buildTooltipSection(parent, controls, y)
     controls.tooltipOffsetYEdit:SetScript("OnEditFocusLost", onTooltipOffsetYFocusLost)
     controls.tooltipOffsetYEdit:SetScript("OnEscapePressed", onTooltipOffsetYEscapePressed)
 
-    return y
+    return y - 44
 end
 
 local function buildPanel(panel)
     local controls = {}
     local content = panel.contentFrame or panel
+    local contentHeight
     local y = -8
 
     state.panel = panel
@@ -925,9 +938,13 @@ local function buildPanel(panel)
     y = buildProfileSection(content, controls, y)
     y = buildTuningSection(content, controls, y)
     y = buildDurationSection(content, controls, y)
-    buildTooltipSection(content, controls, y)
+    y = buildTooltipSection(content, controls, y)
 
-    content:SetHeight(ADVANCED_MIN_CONTENT_HEIGHT)
+    contentHeight = (-y) + 48
+    if contentHeight < ADVANCED_MIN_CONTENT_HEIGHT then
+        contentHeight = ADVANCED_MIN_CONTENT_HEIGHT
+    end
+    content:SetHeight(contentHeight)
 end
 
 ------------------------------------------------------------------------
