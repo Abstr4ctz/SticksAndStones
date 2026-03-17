@@ -27,11 +27,11 @@
 
 **Nampower** *(required)*
 The addon will not load without Nampower.
-→ https://github.com/pepopo978/nampower
+→ https://gitea.com/avitasia/nampower/releases/
 
 **UnitXP** *(optional)*
 Enables live range checking and missing-totem detection for active totems. Without it, range fading is disabled and missing alerts rely on `UNIT_DIED` or normal expiry only.
-→ https://github.com/pepopo978/unitxp
+→ https://codeberg.org/konaka/UnitXP_SP3/releases
 
 ---
 
