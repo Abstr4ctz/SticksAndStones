@@ -37,7 +37,7 @@ Enables live range checking and missing-totem detection for active totems. Witho
 
 ## 2. Installation
 
-Copy the `Final` folder into your `Interface/AddOns` directory and rename it `SticksAndStones` so the path is:
+Copy the `SticksAndStones-main` folder into your `Interface/AddOns` directory and rename it `SticksAndStones` so the path is:
 
 ```
 Interface/AddOns/SticksAndStones/SticksAndStones.toc
