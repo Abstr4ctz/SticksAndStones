@@ -252,7 +252,7 @@ end
 ------------------------------------------------------------------------
 
 local function createButtonFrame()
-    local frame = CreateFrame("Button", nil, MINIMAP_FRAME)
+    local frame = CreateFrame("Button", "SNSMinimapButtonFrame", MINIMAP_FRAME)
     frame:SetWidth(BUTTON_SIZE)
     frame:SetHeight(BUTTON_SIZE)
     frame:SetFrameStrata("MEDIUM")
